@@ -199,10 +199,8 @@ func eventHandler(evt interface{}) {
 			pollVote, err := client.DecryptPollVote(context.Background(), v)
 			if err == nil && len(pollVote.GetSelectedOptions()) > 0 {
 				go func(sender string, name string) {
-					if appDB == nil { return }
-					var hookURL string
-					err := appDB.QueryRow("SELECT value FROM wa_settings WHERE key = 'webhook_url'").Scan(&hookURL)
-					if err == nil && hookURL != "" {
+					urls := getWebhooks()
+					if len(urls) > 0 {
 						firstHash := fmt.Sprintf("%X", pollVote.GetSelectedOptions()[0])
 						var optionText string
 						msgId := v.Message.GetPollUpdateMessage().GetPollCreationMessageKey().GetID()
@@ -217,8 +215,13 @@ func eventHandler(evt interface{}) {
 							"timestamp": time.Now().Format(time.RFC3339),
 						}
 						body, _ := json.Marshal(payload)
-						httpClient := &http.Client{Timeout: 10 * time.Second}
-						httpClient.Post(hookURL, "application/json", bytes.NewBuffer(body))
+						
+						for _, u := range urls {
+							go func(hookURL string) {
+								httpClient := &http.Client{Timeout: 10 * time.Second}
+								httpClient.Post(hookURL, "application/json", bytes.NewBuffer(body))
+							}(u)
+						}
 					}
 				}(v.Info.Sender.User, v.Info.PushName)
 			}
@@ -239,10 +242,8 @@ func eventHandler(evt interface{}) {
 
 		// Panggil Webhook jika ada
 		go func(sender string, name string, text string) {
-			if appDB == nil { return }
-			var hookURL string
-			err := appDB.QueryRow("SELECT value FROM wa_settings WHERE key = 'webhook_url'").Scan(&hookURL)
-			if err == nil && hookURL != "" {
+			urls := getWebhooks()
+			if len(urls) > 0 {
 				payload := map[string]string{
 					"sender": sender,
 					"name": name,
@@ -250,8 +251,12 @@ func eventHandler(evt interface{}) {
 					"timestamp": time.Now().Format(time.RFC3339),
 				}
 				body, _ := json.Marshal(payload)
-				httpClient := &http.Client{Timeout: 10 * time.Second}
-				httpClient.Post(hookURL, "application/json", bytes.NewBuffer(body))
+				for _, u := range urls {
+					go func(hookURL string) {
+						httpClient := &http.Client{Timeout: 10 * time.Second}
+						httpClient.Post(hookURL, "application/json", bytes.NewBuffer(body))
+					}(u)
+				}
 			}
 		}(v.Info.Sender.User, v.Info.PushName, msgText)
 
@@ -265,6 +270,23 @@ func eventHandler(evt interface{}) {
 			client.SendMessage(context.Background(), v.Info.Chat, replyMsg)
 		}
 	}
+}
+
+func getWebhooks() []string {
+	if appDB == nil { return nil }
+	var urlsStr string
+	err := appDB.QueryRow("SELECT value FROM wa_settings WHERE key = 'webhook_urls'").Scan(&urlsStr)
+	if err != nil || urlsStr == "" {
+		var oldUrl string
+		appDB.QueryRow("SELECT value FROM wa_settings WHERE key = 'webhook_url'").Scan(&oldUrl)
+		if oldUrl != "" {
+			return []string{oldUrl}
+		}
+		return nil
+	}
+	var urls []string
+	json.Unmarshal([]byte(urlsStr), &urls)
+	return urls
 }
 
 func handlePing(w http.ResponseWriter, r *http.Request) {
@@ -292,102 +314,86 @@ func handleRoot(w http.ResponseWriter, r *http.Request) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WA Manager Dashboard</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --bg-color: #f5f5f7;
-            --card-bg: rgba(255, 255, 255, 0.8);
-            --primary: #10b981;
-            --primary-hover: #059669;
+            --card-bg: #ffffff;
+            --primary: #0071e3;
+            --primary-hover: #0077ED;
             --text-main: #1d1d1f;
             --text-muted: #86868b;
-            --border: rgba(0, 0, 0, 0.08);
+            --border: #d2d2d7;
+            --danger: #ff3b30;
+            --success: #34c759;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: 'Inter', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-main);
             min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 2rem;
+            -webkit-font-smoothing: antialiased;
         }
         .container {
             width: 100%;
             max-width: 600px;
+            margin: 0 auto;
         }
         .card {
             background: var(--card-bg);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid var(--border);
-            border-radius: 1.5rem;
+            border-radius: 20px;
             padding: 2.5rem;
-            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0,0,0,0.02);
+            border: 1px solid rgba(0,0,0,0.02);
         }
-        .header {
-            text-align: center;
-            margin-bottom: 2rem;
-        }
+        .header { text-align: center; margin-bottom: 2.5rem; }
         .title {
             font-size: 2rem;
             font-weight: 700;
             color: var(--text-main);
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.75rem;
             letter-spacing: -0.02em;
         }
         .status-badge {
             display: inline-flex;
             align-items: center;
             gap: 0.5rem;
-            padding: 0.25rem 1rem;
-            border-radius: 9999px;
+            padding: 0.4rem 1.2rem;
+            border-radius: 980px;
             font-size: 0.875rem;
             font-weight: 500;
-            background: rgba(0,0,0,0.03);
-            border: 1px solid var(--border);
+            background: #f5f5f7;
+            color: var(--text-main);
         }
         .status-dot {
             width: 8px;
             height: 8px;
             border-radius: 50%;
             background-color: {{STATUS_COLOR}};
-            box-shadow: 0 0 10px {{STATUS_COLOR}};
+            box-shadow: 0 0 8px {{STATUS_COLOR}};
         }
-        .form-group {
-            margin-bottom: 1.5rem;
-        }
-        .label {
-            display: block;
-            font-size: 0.875rem;
-            font-weight: 500;
-            color: var(--text-muted);
-            margin-bottom: 0.5rem;
-        }
+        .form-group { margin-bottom: 1.25rem; }
         .input {
             width: 100%;
             background: #ffffff;
             border: 1px solid var(--border);
-            border-radius: 0.75rem;
+            border-radius: 12px;
             padding: 0.875rem 1rem;
             color: var(--text-main);
             font-size: 1rem;
             font-family: inherit;
-            transition: all 0.2s;
-            box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+            transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
         }
         .input:focus {
             outline: none;
             border-color: var(--primary);
-            box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+            box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.15);
         }
         .actions {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 1rem;
-            margin-bottom: 2rem;
+            margin-bottom: 2.5rem;
         }
         .btn {
             display: inline-flex;
@@ -396,37 +402,34 @@ func handleRoot(w http.ResponseWriter, r *http.Request) {
             gap: 0.5rem;
             width: 100%;
             padding: 0.875rem 1.5rem;
-            border-radius: 0.75rem;
-            font-weight: 600;
+            border-radius: 980px;
+            font-weight: 500;
             font-size: 1rem;
             cursor: pointer;
             text-decoration: none;
-            transition: all 0.2s;
+            transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
             border: none;
         }
         .btn-primary {
             background: var(--primary);
             color: white;
-            box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.2);
         }
-        .btn-primary:hover {
-            background: var(--primary-hover);
-            transform: translateY(-2px);
-        }
+        .btn-primary:hover { background: var(--primary-hover); transform: scale(0.98); }
         .btn-danger {
-            background: rgba(239, 68, 68, 0.05);
-            color: #ef4444;
-            border: 1px solid rgba(239, 68, 68, 0.1);
+            background: rgba(255, 59, 48, 0.1);
+            color: var(--danger);
         }
-        .btn-danger:hover {
-            background: rgba(239, 68, 68, 0.1);
-            transform: translateY(-2px);
+        .btn-danger:hover { background: rgba(255, 59, 48, 0.15); transform: scale(0.98); }
+        .btn-secondary {
+            background: var(--bg-color);
+            color: var(--primary);
         }
+        .btn-secondary:hover { background: #e8e8ed; transform: scale(0.98); }
+        
         .test-section {
-            background: rgba(0,0,0,0.02);
-            border-radius: 1rem;
+            background: var(--bg-color);
+            border-radius: 16px;
             padding: 1.5rem;
-            border: 1px solid var(--border);
         }
         .test-title {
             font-size: 1.125rem;
@@ -437,38 +440,30 @@ func handleRoot(w http.ResponseWriter, r *http.Request) {
             position: fixed;
             bottom: 2rem;
             right: 2rem;
-            background: var(--primary);
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(10px);
             color: white;
             padding: 1rem 1.5rem;
-            border-radius: 0.5rem;
+            border-radius: 980px;
             font-weight: 500;
             opacity: 0;
             transform: translateY(1rem);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
             pointer-events: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
-        #toast.show {
-            opacity: 1;
-            transform: translateY(0);
-        }
+        #toast.show { opacity: 1; transform: translateY(0); }
     </style>
 </head>
 <body>
-    <div class="container" id="lockScreen">
-        <div class="card" style="max-width: 400px; margin: 0 auto; text-align: center;">
-            <div style="display:inline-flex; align-items:center; justify-content:center; width:64px; height:64px; border-radius:50%; background:rgba(16,185,129,0.1); color:var(--primary); margin-bottom:1.5rem;">
-                <svg width="32" height="32" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-            </div>
-            <h1 class="title" style="font-size:1.5rem;">Akses Tertutup</h1>
-            <p class="label" style="margin-bottom: 2rem;">Masukkan API Key untuk membuka WA Manager</p>
-            <div class="form-group">
-                <input type="password" id="lockApiKey" class="input" placeholder="API_KEY" onkeypress="if(event.key === 'Enter') verifyKey()">
-            </div>
-            <button class="btn btn-primary" onclick="verifyKey()" id="btnVerify">Buka Kunci</button>
+    <div class="container" id="lockScreen" style="display: flex; height: 100vh; align-items: center; justify-content: center;">
+        <div style="width: 100%; max-width: 320px;">
+            <input type="password" id="lockApiKey" class="input" style="text-align: center; border-radius: 980px; margin-bottom: 1rem; padding: 1rem;" onkeypress="if(event.key === 'Enter') verifyKey()">
+            <button class="btn btn-primary" style="padding: 1rem;" onclick="verifyKey()" id="btnVerify">Masuk</button>
         </div>
     </div>
 
-    <div class="container" id="dashboardScreen" style="display: none; opacity: 0; transition: opacity 0.5s;">
+    <div class="container" id="dashboardScreen" style="display: none; opacity: 0; transition: opacity 2s cubic-bezier(0.25, 0.1, 0.25, 1); padding: 3rem 1.5rem;">
         <div class="card">
             <div class="header">
                 <h1 class="title">WA Manager</h1>
@@ -481,44 +476,42 @@ func handleRoot(w http.ResponseWriter, r *http.Request) {
             <input type="hidden" id="apiKey">
 
             <div class="actions">
-                <a href="/qr" id="linkQr" class="btn btn-primary">
-                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
-                    Buka QR (Login)
-                </a>
-                <a href="/logout" id="linkLogout" class="btn btn-danger" onclick="return confirm('Yakin ingin logout dari sesi ini?')">
-                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
-                    Logout Sesi
-                </a>
+                <a href="/qr" id="linkQr" class="btn btn-primary">Buka QR</a>
+                <a href="/logout" id="linkLogout" class="btn btn-danger" onclick="return confirm('Yakin ingin logout?')">Logout Sesi</a>
             </div>
 
-            <div class="test-section" style="margin-bottom: 2rem;">
+            <div class="test-section" style="margin-bottom: 1.5rem;">
                 <h2 class="test-title">Pengaturan Webhook</h2>
-                <div class="form-group">
-                    <input type="text" id="webhookUrl" class="input" placeholder="https://domain.com/webhook (Kosongkan untuk off)">
-                </div>
-                <button class="btn btn-primary" onclick="saveWebhook()" id="saveHookBtn">
-                    Simpan Webhook
-                </button>
+                <div id="webhookList"></div>
+                <button class="btn btn-secondary" onclick="addWebhookField('')" style="margin-bottom: 1.5rem; width: auto; font-size: 0.875rem; padding: 0.5rem 1rem;">+ Tambah URL Webhook</button>
+                <button class="btn btn-primary" onclick="saveWebhook()" id="saveHookBtn">Simpan Webhook</button>
             </div>
 
             <div class="test-section">
-                <h2 class="test-title">Uji Coba Pengiriman API</h2>
+                <h2 class="test-title">Uji Coba Pengiriman</h2>
                 <div class="form-group">
-                    <input type="text" id="testPhone" class="input" placeholder="Nomor Tujuan (misal: 62857...)">
+                    <input type="text" id="testPhone" class="input" placeholder="Nomor Tujuan (62857...)">
                 </div>
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <input type="text" id="testMessage" class="input" placeholder="Tuliskan pesan percobaan...">
+                <div class="form-group" style="margin-bottom: 1.5rem;">
+                    <input type="text" id="testMessage" class="input" placeholder="Tuliskan pesan...">
                 </div>
-                <button class="btn btn-primary" onclick="sendMessage()" id="sendBtn">
-                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
-                    Kirim Pesan
-                </button>
+                <button class="btn btn-primary" onclick="sendMessage()" id="sendBtn">Kirim Pesan</button>
             </div>
         </div>
     </div>
     <div id="toast">Notifikasi</div>
 
     <script>
+        function addWebhookField(val) {
+            const div = document.createElement('div');
+            div.className = 'form-group webhook-item';
+            div.style.display = 'flex';
+            div.style.gap = '0.5rem';
+            div.innerHTML = '<input type="text" class="input webhook-url" value="' + val + '" placeholder="https://domain.com/webhook">' +
+                '<button class="btn btn-danger" style="width: auto; padding: 0 1rem; border-radius: 12px;" onclick="this.parentElement.remove()">X</button>';
+            document.getElementById('webhookList').appendChild(div);
+        }
+
         async function verifyKey() {
             const key = document.getElementById('lockApiKey').value;
             const btn = document.getElementById('btnVerify');
@@ -534,13 +527,17 @@ func handleRoot(w http.ResponseWriter, r *http.Request) {
                     document.getElementById('lockScreen').style.display = 'none';
                     const db = document.getElementById('dashboardScreen');
                     db.style.display = 'block';
-                    setTimeout(() => db.style.opacity = '1', 50);
+                    // Trigger reflow before setting opacity
+                    void db.offsetWidth;
+                    db.style.opacity = '1';
 
-                    // Fetch current webhook
+                    // Fetch current webhooks
                     const hookRes = await fetch('/api/webhook?key=' + encodeURIComponent(key));
                     if (hookRes.ok) {
                         const hookData = await hookRes.json();
-                        document.getElementById('webhookUrl').value = hookData.webhook_url || '';
+                        const urls = hookData.webhook_urls || [];
+                        if (urls.length === 0) addWebhookField('');
+                        else urls.forEach(u => addWebhookField(u));
                     }
                 } else {
                     showToast('API Key Salah!', true);
@@ -548,24 +545,25 @@ func handleRoot(w http.ResponseWriter, r *http.Request) {
             } catch (e) {
                 showToast('Koneksi Error', true);
             }
-            btn.innerHTML = 'Buka Kunci';
+            btn.innerHTML = 'Masuk';
         }
 
         async function saveWebhook() {
             const key = document.getElementById('apiKey').value;
-            const url = document.getElementById('webhookUrl').value;
+            const inputs = document.querySelectorAll('.webhook-url');
+            const urls = Array.from(inputs).map(i => i.value.trim()).filter(v => v !== '');
             const btn = document.getElementById('saveHookBtn');
             btn.innerHTML = 'Menyimpan...';
             try {
                 const res = await fetch('/api/webhook?key=' + encodeURIComponent(key), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ webhook_url: url })
+                    body: JSON.stringify({ webhook_urls: urls })
                 });
                 if (res.ok) showToast('Webhook berhasil disimpan!');
                 else showToast('Gagal menyimpan webhook', true);
             } catch (e) {
-                showToast('Error', true);
+                showToast('Error koneksi', true);
             }
             btn.innerHTML = 'Simpan Webhook';
         }
@@ -573,7 +571,7 @@ func handleRoot(w http.ResponseWriter, r *http.Request) {
         function showToast(msg, isError = false) {
             const toast = document.getElementById('toast');
             toast.textContent = msg;
-            toast.style.background = isError ? '#ef4444' : '#10b981';
+            toast.style.background = isError ? 'var(--danger)' : 'rgba(0,0,0,0.8)';
             toast.classList.add('show');
             setTimeout(() => toast.classList.remove('show'), 3000);
         }
@@ -594,9 +592,7 @@ func handleRoot(w http.ResponseWriter, r *http.Request) {
 
             try {
                 let headers = { 'Content-Type': 'application/json' };
-                if (key) {
-                    headers['Authorization'] = 'Bearer ' + key;
-                }
+                if (key) headers['Authorization'] = 'Bearer ' + key;
 
                 const response = await fetch('/send', {
                     method: 'POST',
@@ -618,7 +614,7 @@ func handleRoot(w http.ResponseWriter, r *http.Request) {
                 showToast('Terjadi kesalahan koneksi', true);
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = '<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg> Kirim Pesan';
+                btn.innerHTML = 'Kirim Pesan';
             }
         }
     </script>
@@ -1192,24 +1188,24 @@ func handleWebhookApi(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	if r.Method == "GET" {
-		var hookURL string
-		if appDB != nil {
-			appDB.QueryRow("SELECT value FROM wa_settings WHERE key = 'webhook_url'").Scan(&hookURL)
-		}
-		json.NewEncoder(w).Encode(map[string]string{"webhook_url": hookURL})
+		urls := getWebhooks()
+		if urls == nil { urls = []string{} }
+		json.NewEncoder(w).Encode(map[string]interface{}{"webhook_urls": urls})
 		return
 	}
 
 	if r.Method == "POST" {
 		var req struct {
-			WebhookURL string `json:"webhook_url"`
+			WebhookURLs []string `json:"webhook_urls"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		
+		urlsBytes, _ := json.Marshal(req.WebhookURLs)
 		if appDB != nil {
-			_, err := appDB.Exec("INSERT INTO wa_settings (key, value) VALUES ('webhook_url', $1) ON CONFLICT (key) DO UPDATE SET value = $1", req.WebhookURL)
+			_, err := appDB.Exec("INSERT INTO wa_settings (key, value) VALUES ('webhook_urls', $1) ON CONFLICT (key) DO UPDATE SET value = $1", string(urlsBytes))
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
