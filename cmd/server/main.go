@@ -281,7 +281,15 @@ func handleSend(w http.ResponseWriter, r *http.Request) {
 	if req.ImageURL != "" {
 		// Gunakan custom HTTP client dengan timeout
 		httpClient := &http.Client{Timeout: 30 * time.Second}
-		imgResp, err := httpClient.Get(req.ImageURL)
+		imgReq, err := http.NewRequest("GET", req.ImageURL, nil)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Invalid image URL: %v", err), http.StatusBadRequest)
+			return
+		}
+		// Tambahkan User-Agent agar tidak diblokir oleh sistem keamanan web (seperti Wikimedia/Cloudflare)
+		imgReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+		
+		imgResp, err := httpClient.Do(imgReq)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to download image URL: %v", err), http.StatusBadRequest)
 			return
