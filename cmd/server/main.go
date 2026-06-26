@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -19,6 +21,7 @@ import (
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 	waLog "go.mau.fi/whatsmeow/util/log"
+	"google.golang.org/protobuf/proto"
 )
 
 var client *whatsmeow.Client
@@ -166,7 +169,7 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Write([]byte("✅ Berhasil Logout! Server sedang memulai ulang untuk menyiapkan QR Code baru... (Refresh halaman /qr dalam 10 detik)."))
-	
+
 	// Restart server secara paksa agar whatsmeow membuat jalur QR Code baru
 	go func() {
 		client.Disconnect()
@@ -214,8 +217,10 @@ func handleQR(w http.ResponseWriter, r *http.Request) {
 }
 
 type SendRequest struct {
-	Phone   string `json:"phone"`
-	Message string `json:"message"`
+	Phone       string `json:"phone"`
+	Message     string `json:"message"`
+	ImageURL    string `json:"image_url"`
+	ImageBase64 string `json:"image_base64"`
 }
 
 func handleSend(w http.ResponseWriter, r *http.Request) {
@@ -239,8 +244,8 @@ func handleSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Phone == "" || req.Message == "" {
-		http.Error(w, "Phone and message are required", http.StatusBadRequest)
+	if req.Phone == "" || (req.Message == "" && req.ImageURL == "" && req.ImageBase64 == "") {
+		http.Error(w, "Phone and (message or image) are required", http.StatusBadRequest)
 		return
 	}
 
@@ -252,9 +257,42 @@ func handleSend(w http.ResponseWriter, r *http.Request) {
 	// Parse JID (e.g. 628123456789)
 	targetJID := types.NewJID(req.Phone, types.DefaultUserServer)
 
+	// Proses Gambar jika ada
+	var imageBytes []byte
+	if req.ImageURL != "" {
+		imgResp, err := http.Get(req.ImageURL)
+		if err == nil {
+			defer imgResp.Body.Close()
+			imageBytes, _ = io.ReadAll(imgResp.Body)
+		}
+	} else if req.ImageBase64 != "" {
+		imageBytes, _ = base64.StdEncoding.DecodeString(req.ImageBase64)
+	}
+
 	// Build the message
-	msg := &waE2E.Message{
-		Conversation: &req.Message,
+	msg := &waE2E.Message{}
+
+	if len(imageBytes) > 0 {
+		// Upload gambar ke server WhatsApp
+		uploaded, err := client.Upload(context.Background(), imageBytes, whatsmeow.MediaImage)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to upload image to WhatsApp: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		msg.ImageMessage = &waE2E.ImageMessage{
+			Caption:       proto.String(req.Message),
+			Mimetype:      proto.String(http.DetectContentType(imageBytes)),
+			URL:           &uploaded.URL,
+			DirectPath:    &uploaded.DirectPath,
+			MediaKey:      uploaded.MediaKey,
+			FileEncSHA256: uploaded.FileEncSHA256,
+			FileSHA256:    uploaded.FileSHA256,
+			FileLength:    proto.Uint64(uploaded.FileLength),
+		}
+	} else {
+		// Pesan Teks Biasa
+		msg.Conversation = &req.Message
 	}
 
 	resp, err := client.SendMessage(context.Background(), targetJID, msg)
