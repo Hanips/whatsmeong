@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	_ "github.com/lib/pq"
@@ -16,6 +17,7 @@ import (
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	"go.mau.fi/whatsmeow/types"
+	"go.mau.fi/whatsmeow/types/events"
 	waLog "go.mau.fi/whatsmeow/util/log"
 )
 
@@ -44,6 +46,7 @@ func main() {
 
 	clientLog := waLog.Stdout("Client", "INFO", true)
 	client = whatsmeow.NewClient(deviceStore, clientLog)
+	client.AddEventHandler(eventHandler)
 
 	if client.Store.ID == nil {
 		// No ID stored, need to link device
@@ -98,6 +101,34 @@ func main() {
 	fmt.Println("Shutting down...")
 	client.Disconnect()
 	server.Shutdown(context.Background())
+}
+
+func eventHandler(evt interface{}) {
+	switch v := evt.(type) {
+	case *events.Message:
+		// Abaikan pesan dari diri sendiri
+		if v.Info.IsFromMe {
+			return
+		}
+
+		// Ambil teks pesan
+		msgText := ""
+		if v.Message.GetConversation() != "" {
+			msgText = v.Message.GetConversation()
+		} else if v.Message.GetExtendedTextMessage() != nil {
+			msgText = v.Message.GetExtendedTextMessage().GetText()
+		}
+
+		// Jika ada yang chat "tes"
+		if strings.ToLower(strings.TrimSpace(msgText)) == "tes" {
+			replyText := "✅ WA Manager Status: AKTIF & SIAP!\nServer berjalan di Render Cloud."
+			replyMsg := &waE2E.Message{
+				Conversation: &replyText,
+			}
+			// Kirim balasan
+			client.SendMessage(context.Background(), v.Info.Chat, replyMsg)
+		}
+	}
 }
 
 func handlePing(w http.ResponseWriter, r *http.Request) {
