@@ -427,7 +427,7 @@ func handleRoot(w http.ResponseWriter, r *http.Request) {
             border-radius: 1rem;
             padding: 1.5rem;
             border: 1px solid var(--border);
-        } }
+        }
         .test-title {
             font-size: 1.125rem;
             font-weight: 600;
@@ -1039,46 +1039,46 @@ func sendInternal(req SendRequest) (whatsmeow.SendResponse, error) {
 
 	if msg.PollCreationMessage == nil {
 		if len(mediaBytes) > 0 {
-		mimeType := http.DetectContentType(mediaBytes)
-		if isDocument {
-			uploaded, err := client.Upload(context.Background(), mediaBytes, whatsmeow.MediaDocument)
-			if err != nil { return whatsmeow.SendResponse{}, err }
-			fileName := req.FileName
-			if fileName == "" { fileName = "document.pdf" }
-			msg.DocumentMessage = &waE2E.DocumentMessage{
-				Caption: proto.String(req.Message), Mimetype: proto.String(mimeType),
-				FileName: proto.String(fileName), URL: &uploaded.URL,
-				DirectPath: &uploaded.DirectPath, MediaKey: uploaded.MediaKey,
-				FileEncSHA256: uploaded.FileEncSHA256, FileSHA256: uploaded.FileSHA256,
-				FileLength: proto.Uint64(uploaded.FileLength),
+			mimeType := http.DetectContentType(mediaBytes)
+			if isDocument {
+				uploaded, err := client.Upload(context.Background(), mediaBytes, whatsmeow.MediaDocument)
+				if err != nil { return whatsmeow.SendResponse{}, err }
+				fileName := req.FileName
+				if fileName == "" { fileName = "document.pdf" }
+				msg.DocumentMessage = &waE2E.DocumentMessage{
+					Caption: proto.String(req.Message), Mimetype: proto.String(mimeType),
+					FileName: proto.String(fileName), URL: &uploaded.URL,
+					DirectPath: &uploaded.DirectPath, MediaKey: uploaded.MediaKey,
+					FileEncSHA256: uploaded.FileEncSHA256, FileSHA256: uploaded.FileSHA256,
+					FileLength: proto.Uint64(uploaded.FileLength),
+				}
+			} else {
+				uploaded, err := client.Upload(context.Background(), mediaBytes, whatsmeow.MediaImage)
+				if err != nil { return whatsmeow.SendResponse{}, err }
+				msg.ImageMessage = &waE2E.ImageMessage{
+					Caption: proto.String(req.Message), Mimetype: proto.String(mimeType),
+					URL: &uploaded.URL, DirectPath: &uploaded.DirectPath,
+					MediaKey: uploaded.MediaKey, FileEncSHA256: uploaded.FileEncSHA256,
+					FileSHA256: uploaded.FileSHA256, FileLength: proto.Uint64(uploaded.FileLength),
+				}
+			}
+		} else if req.ContactVcard != "" {
+			msg.ContactMessage = &waE2E.ContactMessage{
+				DisplayName: proto.String(req.ContactName),
+				Vcard:       proto.String(req.ContactVcard),
+			}
+		} else if req.LocationLat != 0 && req.LocationLng != 0 {
+			msg.LocationMessage = &waE2E.LocationMessage{
+				DegreesLatitude:  proto.Float64(req.LocationLat),
+				DegreesLongitude: proto.Float64(req.LocationLng),
+				Name:             proto.String(req.LocationName),
+				Address:          proto.String(req.Message),
 			}
 		} else {
-			uploaded, err := client.Upload(context.Background(), mediaBytes, whatsmeow.MediaImage)
-			if err != nil { return whatsmeow.SendResponse{}, err }
-			msg.ImageMessage = &waE2E.ImageMessage{
-				Caption: proto.String(req.Message), Mimetype: proto.String(mimeType),
-				URL: &uploaded.URL, DirectPath: &uploaded.DirectPath,
-				MediaKey: uploaded.MediaKey, FileEncSHA256: uploaded.FileEncSHA256,
-				FileSHA256: uploaded.FileSHA256, FileLength: proto.Uint64(uploaded.FileLength),
+			msg.ExtendedTextMessage = &waE2E.ExtendedTextMessage{
+				Text: &req.Message,
 			}
 		}
-	} else if req.ContactVcard != "" {
-		msg.ContactMessage = &waE2E.ContactMessage{
-			DisplayName: proto.String(req.ContactName),
-			Vcard:       proto.String(req.ContactVcard),
-		}
-	} else if req.LocationLat != 0 && req.LocationLng != 0 {
-		msg.LocationMessage = &waE2E.LocationMessage{
-			DegreesLatitude:  proto.Float64(req.LocationLat),
-			DegreesLongitude: proto.Float64(req.LocationLng),
-			Name:             proto.String(req.LocationName),
-			Address:          proto.String(req.Message),
-		}
-	} else {
-		msg.ExtendedTextMessage = &waE2E.ExtendedTextMessage{
-			Text: &req.Message,
-		}
-	}
 	}
 
 
@@ -1162,8 +1162,8 @@ func handleBroadcast(w http.ResponseWriter, r *http.Request) {
 		}
 	}(req.Phones, req.Payload, req.DelayMs)
 
-	w.WriteHeader(http.StatusAccepted)
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"status": "processing",
 		"message": fmt.Sprintf("Broadcasting to %d numbers in background", len(req.Phones)),
