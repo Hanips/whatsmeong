@@ -259,12 +259,20 @@ func handleSend(w http.ResponseWriter, r *http.Request) {
 
 	// Proses Gambar jika ada
 	var imageBytes []byte
+	var mimeType string
 	if req.ImageURL != "" {
 		imgResp, err := http.Get(req.ImageURL)
-		if err == nil {
-			defer imgResp.Body.Close()
-			imageBytes, _ = io.ReadAll(imgResp.Body)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to download image URL: %v", err), http.StatusBadRequest)
+			return
 		}
+		defer imgResp.Body.Close()
+
+		if imgResp.StatusCode != 200 {
+			http.Error(w, fmt.Sprintf("Image URL returned status code %d", imgResp.StatusCode), http.StatusBadRequest)
+			return
+		}
+		imageBytes, _ = io.ReadAll(imgResp.Body)
 	} else if req.ImageBase64 != "" {
 		imageBytes, _ = base64.StdEncoding.DecodeString(req.ImageBase64)
 	}
@@ -273,6 +281,12 @@ func handleSend(w http.ResponseWriter, r *http.Request) {
 	msg := &waE2E.Message{}
 
 	if len(imageBytes) > 0 {
+		mimeType = http.DetectContentType(imageBytes)
+		if !strings.HasPrefix(mimeType, "image/") {
+			http.Error(w, fmt.Sprintf("Invalid image file. Detected format: %s", mimeType), http.StatusBadRequest)
+			return
+		}
+
 		// Upload gambar ke server WhatsApp
 		uploaded, err := client.Upload(context.Background(), imageBytes, whatsmeow.MediaImage)
 		if err != nil {
@@ -282,7 +296,7 @@ func handleSend(w http.ResponseWriter, r *http.Request) {
 
 		msg.ImageMessage = &waE2E.ImageMessage{
 			Caption:       proto.String(req.Message),
-			Mimetype:      proto.String(http.DetectContentType(imageBytes)),
+			Mimetype:      proto.String(mimeType),
 			URL:           &uploaded.URL,
 			DirectPath:    &uploaded.DirectPath,
 			MediaKey:      uploaded.MediaKey,
