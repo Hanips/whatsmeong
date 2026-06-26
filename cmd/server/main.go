@@ -80,9 +80,11 @@ func main() {
 	}
 
 	// Setup HTTP Handlers
+	http.HandleFunc("/", handleRoot)
 	http.HandleFunc("/ping", handlePing)
 	http.HandleFunc("/qr", handleQR)
 	http.HandleFunc("/send", handleSend)
+	http.HandleFunc("/logout", handleLogout)
 
 	server := &http.Server{Addr: ":" + port}
 
@@ -134,6 +136,36 @@ func eventHandler(evt interface{}) {
 func handlePing(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("pong"))
+}
+
+func handleRoot(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html")
+	w.Write([]byte(`<h1>WA Manager Aktif</h1><ul><li><a href="/qr">/qr (Login)</a></li><li>/logout?key=API_KEY_ANDA</li></ul>`))
+}
+
+func handleLogout(w http.ResponseWriter, r *http.Request) {
+	apiKey := os.Getenv("API_KEY")
+	if apiKey != "" && r.URL.Query().Get("key") != apiKey {
+		http.Error(w, "Unauthorized. Akses ditolak! Gunakan URL: /logout?key=API_KEY_ANDA", http.StatusUnauthorized)
+		return
+	}
+
+	if client.Store.ID == nil {
+		w.Write([]byte("Belum ada akun WhatsApp yang login."))
+		return
+	}
+
+	err := client.Logout(context.Background())
+	if err != nil {
+		w.Write([]byte(fmt.Sprintf("Gagal logout: %v", err)))
+		return
+	}
+
+	w.Write([]byte("✅ Berhasil Logout! WhatsApp lama sudah diputus. Silakan buka /qr untuk menautkan nomor WA yang baru."))
 }
 
 func handleQR(w http.ResponseWriter, r *http.Request) {
