@@ -150,12 +150,44 @@ func main() {
 
 func eventHandler(evt interface{}) {
 	switch v := evt.(type) {
-	case events.PermanentDisconnect:
-		fmt.Printf("Fatal Error (Permanent Disconnect): %s. Menghentikan dan me-restart server...\n", v.PermanentDisconnectDescription())
+	case *events.StreamReplaced:
+		// Terjadi saat WA dibuka di perangkat/browser lain. Ini BUKAN error fatal.
+		// Kita cukup reconnect agar bot tetap hidup.
+		fmt.Println("Stream replaced (WA dibuka di tempat lain). Reconnecting...")
 		go func() {
-			client.Disconnect()
-			os.Exit(0)
+			time.Sleep(3 * time.Second)
+			err := client.Connect()
+			if err != nil {
+				fmt.Printf("Reconnect gagal setelah StreamReplaced: %v. Restarting...\n", err)
+				client.Disconnect()
+				os.Exit(0)
+			}
+			fmt.Println("Reconnect berhasil!")
 		}()
+	case events.PermanentDisconnect:
+		desc := v.PermanentDisconnectDescription()
+		fmt.Printf("Permanent Disconnect: %s\n", desc)
+		// Hanya benar-benar exit jika sesi logout permanen
+		if _, isLoggedOut := v.(*events.LoggedOut); isLoggedOut {
+			fmt.Println("Sesi WA telah logout permanen. Restarting untuk QR baru...")
+			go func() {
+				client.Disconnect()
+				os.Exit(0)
+			}()
+		} else {
+			// Untuk disconnect lain (misal timeout network), coba reconnect
+			fmt.Println("Non-fatal disconnect, mencoba reconnect...")
+			go func() {
+				time.Sleep(5 * time.Second)
+				err := client.Connect()
+				if err != nil {
+					fmt.Printf("Reconnect gagal: %v. Restarting...\n", err)
+					client.Disconnect()
+					os.Exit(0)
+				}
+				fmt.Println("Reconnect berhasil!")
+			}()
+		}
 	case *events.Message:
 		// Abaikan pesan dari diri sendiri atau pesan kosong
 		if v.Info.IsFromMe || v.Message == nil {
