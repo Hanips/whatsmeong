@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 
 var client *whatsmeow.Client
 var qrCode string
+var qrCodeMu sync.RWMutex
 
 func main() {
 	dbLog := waLog.Stdout("Database", "INFO", true)
@@ -62,11 +64,15 @@ func main() {
 		go func() {
 			for evt := range qrChan {
 				if evt.Event == "code" {
+					qrCodeMu.Lock()
 					qrCode = evt.Code
+					qrCodeMu.Unlock()
 					fmt.Println("QR code available. Visit /qr to see it or generate it from this string:", evt.Code)
 				} else if evt.Event == "timeout" {
 					fmt.Println("QR code expired (timeout). Restarting server to generate a new one...")
+					qrCodeMu.Lock()
 					qrCode = ""
+					qrCodeMu.Unlock()
 					go func() {
 						client.Disconnect()
 						os.Exit(0)
@@ -125,8 +131,8 @@ func eventHandler(evt interface{}) {
 			os.Exit(0)
 		}()
 	case *events.Message:
-		// Abaikan pesan dari diri sendiri
-		if v.Info.IsFromMe {
+		// Abaikan pesan dari diri sendiri atau pesan kosong
+		if v.Info.IsFromMe || v.Message == nil {
 			return
 		}
 
@@ -207,14 +213,19 @@ func handleQR(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Already logged in!"))
 		return
 	}
-	if qrCode == "" {
+	
+	qrCodeMu.RLock()
+	currentQR := qrCode
+	qrCodeMu.RUnlock()
+	
+	if currentQR == "" {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		w.Write([]byte("QR code not generated yet, please refresh in a few seconds..."))
 		return
 	}
 
 	// Simply redirect to a public QR code generator to show the QR easily
-	qrURL := fmt.Sprintf("https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=%s", url.QueryEscape(qrCode))
+	qrURL := fmt.Sprintf("https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=%s", url.QueryEscape(currentQR))
 	html := fmt.Sprintf(`
 		<html>
 		<head><title>WhatsApp Login</title></head>
@@ -227,7 +238,7 @@ func handleQR(w http.ResponseWriter, r *http.Request) {
 			</script>
 		</body>
 		</html>
-	`, qrURL, qrCode)
+	`, qrURL, currentQR)
 
 	w.Header().Set("Content-Type", "text/html")
 	w.WriteHeader(http.StatusOK)
@@ -272,8 +283,13 @@ func handleSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Sanitize phone number (hapus spasi, tanda tambah, strip)
+	cleanPhone := strings.ReplaceAll(req.Phone, "+", "")
+	cleanPhone = strings.ReplaceAll(cleanPhone, " ", "")
+	cleanPhone = strings.ReplaceAll(cleanPhone, "-", "")
+
 	// Parse JID (e.g. 628123456789)
-	targetJID := types.NewJID(req.Phone, types.DefaultUserServer)
+	targetJID := types.NewJID(cleanPhone, types.DefaultUserServer)
 
 	// Proses Gambar jika ada
 	var imageBytes []byte
@@ -308,7 +324,12 @@ func handleSend(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else if req.ImageBase64 != "" {
-		imageBytes, _ = base64.StdEncoding.DecodeString(req.ImageBase64)
+		var err error
+		imageBytes, err = base64.StdEncoding.DecodeString(req.ImageBase64)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Invalid base64 string: %v", err), http.StatusBadRequest)
+			return
+		}
 	}
 
 	// Build the message
