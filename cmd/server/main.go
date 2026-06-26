@@ -246,10 +246,13 @@ func handleQR(w http.ResponseWriter, r *http.Request) {
 }
 
 type SendRequest struct {
-	Phone       string `json:"phone"`
-	Message     string `json:"message"`
-	ImageURL    string `json:"image_url"`
-	ImageBase64 string `json:"image_base64"`
+	Phone          string `json:"phone"`
+	Message        string `json:"message"`
+	ImageURL       string `json:"image_url"`
+	ImageBase64    string `json:"image_base64"`
+	DocumentURL    string `json:"document_url"`
+	DocumentBase64 string `json:"document_base64"`
+	FileName       string `json:"file_name"`
 }
 
 func handleSend(w http.ResponseWriter, r *http.Request) {
@@ -273,8 +276,8 @@ func handleSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Phone == "" || (req.Message == "" && req.ImageURL == "" && req.ImageBase64 == "") {
-		http.Error(w, "Phone and (message or image) are required", http.StatusBadRequest)
+	if req.Phone == "" || (req.Message == "" && req.ImageURL == "" && req.ImageBase64 == "" && req.DocumentURL == "" && req.DocumentBase64 == "") {
+		http.Error(w, "Phone and (message or image or document) are required", http.StatusBadRequest)
 		return
 	}
 
@@ -291,73 +294,136 @@ func handleSend(w http.ResponseWriter, r *http.Request) {
 	// Parse JID (e.g. 628123456789)
 	targetJID := types.NewJID(cleanPhone, types.DefaultUserServer)
 
-	// Proses Gambar jika ada
-	var imageBytes []byte
-	var mimeType string
-	if req.ImageURL != "" {
-		// Gunakan custom HTTP client dengan timeout
-		httpClient := &http.Client{Timeout: 30 * time.Second}
-		imgReq, err := http.NewRequest("GET", req.ImageURL, nil)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Invalid image URL: %v", err), http.StatusBadRequest)
-			return
-		}
-		// Tambahkan User-Agent agar tidak diblokir oleh sistem keamanan web (seperti Wikimedia/Cloudflare)
-		imgReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-		
-		imgResp, err := httpClient.Do(imgReq)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to download image URL: %v", err), http.StatusBadRequest)
-			return
-		}
-		defer imgResp.Body.Close()
+	// Proses Media jika ada
+	var mediaBytes []byte
+	var isDocument bool
 
-		if imgResp.StatusCode != 200 {
-			http.Error(w, fmt.Sprintf("Image URL returned status code %d", imgResp.StatusCode), http.StatusBadRequest)
-			return
+	if req.DocumentURL != "" || req.DocumentBase64 != "" {
+		isDocument = true
+		if req.DocumentURL != "" {
+			httpClient := &http.Client{Timeout: 60 * time.Second}
+			mediaReq, err := http.NewRequest("GET", req.DocumentURL, nil)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Invalid document URL: %v", err), http.StatusBadRequest)
+				return
+			}
+			mediaReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+			
+			mediaResp, err := httpClient.Do(mediaReq)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Failed to download document URL: %v", err), http.StatusBadRequest)
+				return
+			}
+			defer mediaResp.Body.Close()
+
+			if mediaResp.StatusCode != 200 {
+				http.Error(w, fmt.Sprintf("Document URL returned status code %d", mediaResp.StatusCode), http.StatusBadRequest)
+				return
+			}
+			
+			// Batasi maksimal 50MB untuk dokumen
+			mediaBytes, err = io.ReadAll(io.LimitReader(mediaResp.Body, 50*1024*1024))
+			if err != nil {
+				http.Error(w, "Failed to read document", http.StatusInternalServerError)
+				return
+			}
+		} else if req.DocumentBase64 != "" {
+			var err error
+			mediaBytes, err = base64.StdEncoding.DecodeString(req.DocumentBase64)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Invalid base64 string: %v", err), http.StatusBadRequest)
+				return
+			}
 		}
-		
-		// Batasi maksimal 15MB untuk mencegah server crash (OOM)
-		imageBytes, err = io.ReadAll(io.LimitReader(imgResp.Body, 15*1024*1024))
-		if err != nil {
-			http.Error(w, "Failed to read image", http.StatusInternalServerError)
-			return
-		}
-	} else if req.ImageBase64 != "" {
-		var err error
-		imageBytes, err = base64.StdEncoding.DecodeString(req.ImageBase64)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Invalid base64 string: %v", err), http.StatusBadRequest)
-			return
+	} else if req.ImageURL != "" || req.ImageBase64 != "" {
+		if req.ImageURL != "" {
+			httpClient := &http.Client{Timeout: 30 * time.Second}
+			mediaReq, err := http.NewRequest("GET", req.ImageURL, nil)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Invalid image URL: %v", err), http.StatusBadRequest)
+				return
+			}
+			mediaReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+			
+			mediaResp, err := httpClient.Do(mediaReq)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Failed to download image URL: %v", err), http.StatusBadRequest)
+				return
+			}
+			defer mediaResp.Body.Close()
+
+			if mediaResp.StatusCode != 200 {
+				http.Error(w, fmt.Sprintf("Image URL returned status code %d", mediaResp.StatusCode), http.StatusBadRequest)
+				return
+			}
+			
+			// Batasi maksimal 15MB untuk gambar
+			mediaBytes, err = io.ReadAll(io.LimitReader(mediaResp.Body, 15*1024*1024))
+			if err != nil {
+				http.Error(w, "Failed to read image", http.StatusInternalServerError)
+				return
+			}
+		} else if req.ImageBase64 != "" {
+			var err error
+			mediaBytes, err = base64.StdEncoding.DecodeString(req.ImageBase64)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Invalid base64 string: %v", err), http.StatusBadRequest)
+				return
+			}
 		}
 	}
 
 	// Build the message
 	msg := &waE2E.Message{}
 
-	if len(imageBytes) > 0 {
-		mimeType = http.DetectContentType(imageBytes)
-		if !strings.HasPrefix(mimeType, "image/") {
-			http.Error(w, fmt.Sprintf("Invalid image file. Detected format: %s", mimeType), http.StatusBadRequest)
-			return
-		}
+	if len(mediaBytes) > 0 {
+		mimeType := http.DetectContentType(mediaBytes)
+		
+		if isDocument {
+			uploaded, err := client.Upload(context.Background(), mediaBytes, whatsmeow.MediaDocument)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Failed to upload document to WhatsApp: %v", err), http.StatusInternalServerError)
+				return
+			}
+			
+			fileName := req.FileName
+			if fileName == "" {
+				fileName = "document.pdf"
+			}
+			
+			msg.DocumentMessage = &waE2E.DocumentMessage{
+				Caption:       proto.String(req.Message),
+				Mimetype:      proto.String(mimeType),
+				FileName:      proto.String(fileName),
+				URL:           &uploaded.URL,
+				DirectPath:    &uploaded.DirectPath,
+				MediaKey:      uploaded.MediaKey,
+				FileEncSHA256: uploaded.FileEncSHA256,
+				FileSHA256:    uploaded.FileSHA256,
+				FileLength:    proto.Uint64(uploaded.FileLength),
+			}
+		} else {
+			if !strings.HasPrefix(mimeType, "image/") {
+				http.Error(w, fmt.Sprintf("Invalid image file. Detected format: %s", mimeType), http.StatusBadRequest)
+				return
+			}
 
-		// Upload gambar ke server WhatsApp
-		uploaded, err := client.Upload(context.Background(), imageBytes, whatsmeow.MediaImage)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to upload image to WhatsApp: %v", err), http.StatusInternalServerError)
-			return
-		}
+			uploaded, err := client.Upload(context.Background(), mediaBytes, whatsmeow.MediaImage)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Failed to upload image to WhatsApp: %v", err), http.StatusInternalServerError)
+				return
+			}
 
-		msg.ImageMessage = &waE2E.ImageMessage{
-			Caption:       proto.String(req.Message),
-			Mimetype:      proto.String(mimeType),
-			URL:           &uploaded.URL,
-			DirectPath:    &uploaded.DirectPath,
-			MediaKey:      uploaded.MediaKey,
-			FileEncSHA256: uploaded.FileEncSHA256,
-			FileSHA256:    uploaded.FileSHA256,
-			FileLength:    proto.Uint64(uploaded.FileLength),
+			msg.ImageMessage = &waE2E.ImageMessage{
+				Caption:       proto.String(req.Message),
+				Mimetype:      proto.String(mimeType),
+				URL:           &uploaded.URL,
+				DirectPath:    &uploaded.DirectPath,
+				MediaKey:      uploaded.MediaKey,
+				FileEncSHA256: uploaded.FileEncSHA256,
+				FileSHA256:    uploaded.FileSHA256,
+				FileLength:    proto.Uint64(uploaded.FileLength),
+			}
 		}
 	} else {
 		// Pesan Teks Biasa
