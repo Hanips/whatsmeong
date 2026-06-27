@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>W-Manager | Dashboard</title>
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Material Symbols -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "apple-bg": "#F5F5F7",
+                        "apple-primary": "#0071E3",
+                        "apple-text": "#1D1D1F",
+                        "apple-text-muted": "#86868B",
+                        "apple-card": "rgba(255, 255, 255, 0.65)",
+                        "apple-card-border": "rgba(255, 255, 255, 0.5)",
+                        "apple-input-bg": "rgba(255, 255, 255, 0.8)",
+                        "error": "#ba1a1a",
+                        "primary": "#0071E3",
+                        "surface": "#faf8fe",
+                        "on-surface": "#1a1b1f",
+                        "surface-container-highest": "#e3e2e7"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "1rem",
+                        "lg": "1.5rem",
+                        "xl": "2rem",
+                        "2xl": "2.5rem",
+                        "3xl": "3rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "24px",
+                        "container-max": "1200px",
+                        "base": "8px",
+                        "section-gap": "120px",
+                        "margin-desktop": "64px",
+                        "margin-mobile": "20px"
+                    },
+                    "boxShadow": {
+                        'apple-soft': '0 8px 30px rgba(0, 0, 0, 0.04)',
+                        'apple-btn': '0 4px 14px rgba(0, 113, 227, 0.25)',
+                    }
+                },
+            },
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #F5F5F7;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            position: relative;
+        }
+        /* Login Styles */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(40px);
+            -webkit-backdrop-filter: blur(40px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.08), 0 4px 12px -3px rgba(0, 0, 0, 0.04), inset 0 1px 1px rgba(255, 255, 255, 0.9);
+        }
+        .liquid-input {
+            background: rgba(255, 255, 255, 0.5);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02), inset 0 1px 2px rgba(255, 255, 255, 0.8), 0 1px 1px rgba(255, 255, 255, 0.4);
+        }
+        .liquid-input:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15), inset 0 2px 4px rgba(0, 0, 0, 0.02), inset 0 1px 2px rgba(255, 255, 255, 0.8);
+            background: rgba(255, 255, 255, 0.8);
+        }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24; }
+        .ambient-glow {
+            position: fixed; width: 600px; height: 600px; border-radius: 50%; z-index: -1; filter: blur(60px);
+            background: radial-gradient(circle, rgba(0, 113, 227, 0.03) 0%, rgba(245, 245, 247, 0) 70%);
+            animation: float 20s infinite alternate ease-in-out;
+        }
+        @keyframes float { 0% { transform: translate(-10%, -10%); } 100% { transform: translate(10%, 10%); } }
+        .shimmer { position: relative; overflow: hidden; }
+        .shimmer::after {
+            content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
+            background: linear-gradient(45deg, transparent 45%, rgba(255, 255, 255, 0.2) 50%, transparent 55%);
+            transform: rotate(30deg); transition: all 0.5s;
+        }
+        .shimmer:hover::after { left: 100%; top: 100%; }
+
+        /* Dashboard Styles */
+        .apple-glass-card {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.4) 100%);
+            backdrop-filter: blur(40px); -webkit-backdrop-filter: blur(40px);
+            border: 1px solid rgba(255, 255, 255, 0.8); border-top: 1px solid rgba(255, 255, 255, 1); border-left: 1px solid rgba(255, 255, 255, 1);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.06), inset 0 0 0 1px rgba(255,255,255,0.3);
+            transition: all 0.3s ease;
+        }
+        .apple-glass-card:hover { box-shadow: 0 16px 48px rgba(0, 0, 0, 0.08), inset 0 0 0 1px rgba(255,255,255,0.4); }
+        .status-dot { background-color: var(--status-color, #10b981); box-shadow: 0 0 10px var(--status-color, #10b981); }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(134, 134, 139, 0.3); border-radius: 10px; }
+        .apple-input {
+            background: rgba(255, 255, 255, 0.5); border: 1px solid rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.02), 0 2px 8px rgba(0,0,0,0.02); transition: all 0.2s ease;
+        }
+        .apple-input:focus { background: rgba(255, 255, 255, 0.95); border-color: #0071E3; box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.15); }
+        
+        #toast {
+            position: fixed; bottom: 2rem; right: 2rem; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); color: white;
+            padding: 1rem 1.5rem; border-radius: 9999px; font-weight: 500; font-size: 14px;
+            opacity: 0; transform: translateY(1rem); transition: all 0.4s cubic-bezier(0.25, 0.1, 0.25, 1); pointer-events: none; z-index: 100;
+        }
+        #toast.show { opacity: 1; transform: translateY(0); }
+    </style>
+</head>
+<body class="text-apple-text min-h-screen flex flex-col">
+
+<!-- Ambient Background -->
+<div class="fixed inset-0 -z-10 pointer-events-none overflow-hidden">
+    <div class="ambient-glow top-0 left-0"></div>
+    <div class="ambient-glow bottom-0 right-0" style="animation-delay: -10s;"></div>
+    <div class="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-blue-200/30 blur-[120px]"></div>
+    <div class="absolute top-[40%] -right-[10%] w-[40%] h-[60%] rounded-full bg-purple-200/20 blur-[140px]"></div>
+</div>
+
+<!-- ================= LOGIN SCREEN ================= -->
+<main id="lockScreen" class="w-full max-w-md px-6 z-10 m-auto flex flex-col items-center transition-all duration-500">
+    <div class="glass-card rounded-3xl p-10 md:p-12 transition-all duration-700 ease-out transform scale-100 hover:scale-[1.01] w-full">
+        <form class="flex flex-col items-center space-y-10" id="loginForm" onsubmit="event.preventDefault(); verifyKey();">
+            <div class="w-full relative group">
+                <input autocomplete="current-password" class="liquid-input w-full text-center text-[17px] py-4 rounded-full transition-all duration-300" id="lockApiKey" required type="password">
+                <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-0 h-[2px] bg-primary transition-all duration-500 group-focus-within:w-1/3 opacity-70 rounded-full"></div>
+            </div>
+            <button id="btnVerify" type="submit" class="group relative flex items-center justify-center w-14 h-14 bg-[#0071E3] text-white rounded-full transition-all duration-300 hover:w-32 hover:scale-105 active:scale-95 shadow-[0_10px_25px_rgba(0,113,227,0.3),inset_0_1px_1px_rgba(255,255,255,0.4)] shimmer overflow-hidden">
+                <span id="btnVerifyText" class="absolute opacity-0 group-hover:opacity-100 group-hover:-translate-x-3 transition-all duration-300 text-[13px] font-medium tracking-wide">ENTER</span>
+                <span id="btnVerifyIcon" class="material-symbols-outlined transition-all duration-300 group-hover:translate-x-8">arrow_forward</span>
+            </button>
+        </form>
+    </div>
+    <div class="mt-12 text-center opacity-30 hover:opacity-60 transition-opacity duration-1000">
+        <p class="text-[13px] tracking-[0.2em] text-[#86868B]">W-MANAGER PROTOCOL</p>
+    </div>
+</main>
+
+<!-- ================= DASHBOARD SCREEN ================= -->
+<main id="dashboardScreen" class="hidden opacity-0 pb-section-gap px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto mt-16 relative z-10 transition-opacity duration-1000 flex-grow w-full">
+    <input type="hidden" id="apiKey">
+    
+    <header class="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-16">
+        <div>
+            <h1 class="text-[48px] md:text-[56px] font-bold tracking-tight text-apple-text leading-tight">Dashboard</h1>
+            <p class="text-apple-text-muted text-lg mt-2 font-medium">Manage your WhatsApp instance.</p>
+        </div>
+        <div class="bg-white/60 backdrop-blur-xl px-4 py-2 rounded-full flex items-center gap-2 border border-white/80 shadow-sm mb-2">
+            <span class="w-2 h-2 rounded-full status-dot" style="--status-color: {{STATUS_COLOR}};"></span>
+            <span class="text-xs font-semibold text-apple-text tracking-wide uppercase">{{STATUS_TEXT}}</span>
+        </div>
+    </header>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <div class="lg:col-span-4 space-y-8">
+            <section class="apple-glass-card p-8 rounded-3xl">
+                <h2 class="text-2xl font-bold mb-6 tracking-tight">Quick Actions</h2>
+                <div class="grid grid-cols-2 gap-4">
+                    <a href="/qr" id="linkQr" class="bg-white/60 hover:bg-white/90 text-apple-primary text-sm font-semibold py-6 px-4 rounded-2xl flex flex-col items-center justify-center gap-3 transition-all border border-white shadow-sm backdrop-blur-md group cursor-pointer text-center">
+                        <span class="material-symbols-outlined text-[32px] group-hover:scale-110 transition-transform">qr_code_2</span>
+                        <span>Buka QR</span>
+                    </a>
+                    <a href="/logout" id="linkLogout" onclick="return confirm('Yakin ingin logout?')" class="bg-white/60 hover:bg-white/90 text-[#ba1a1a] text-sm font-semibold py-6 px-4 rounded-2xl flex flex-col items-center justify-center gap-3 transition-all border border-white shadow-sm backdrop-blur-md group cursor-pointer text-center">
+                        <span class="material-symbols-outlined text-[32px] group-hover:scale-110 transition-transform">logout</span>
+                        <span>Logout Sesi</span>
+                    </a>
+                </div>
+            </section>
+
+            <section class="apple-glass-card p-6 rounded-3xl space-y-4">
+                <h3 class="text-lg font-bold tracking-tight text-apple-text">Test Message</h3>
+                <div class="space-y-4">
+                    <div class="space-y-1.5">
+                        <label class="text-[10px] font-semibold text-apple-text-muted uppercase tracking-wider pl-1">Phone Number</label>
+                        <input id="testPhone" class="w-full apple-input rounded-full px-4 py-2.5 outline-none text-sm font-medium placeholder-gray-400" placeholder="+628..." type="text">
+                    </div>
+                    <div class="space-y-1.5">
+                        <label class="text-[10px] font-semibold text-apple-text-muted uppercase tracking-wider pl-1">Message</label>
+                        <textarea id="testMessage" class="w-full apple-input rounded-2xl px-4 py-3 outline-none text-sm font-medium placeholder-gray-400 custom-scrollbar resize-none" placeholder="Type your message here..." rows="3"></textarea>
+                    </div>
+                    <button id="sendBtn" onclick="sendMessage()" class="w-full bg-apple-primary text-white font-semibold py-3 rounded-full mt-1 hover:bg-blue-600 transition-colors shadow-apple-btn text-sm">
+                        Kirim Pesan
+                    </button>
+                </div>
+            </section>
+        </div>
+
+        <div class="lg:col-span-8 space-y-8">
+            <section class="apple-glass-card p-8 md:p-10 rounded-3xl">
+                <div class="flex justify-between items-center mb-8">
+                    <h2 class="text-[28px] font-bold tracking-tight">Webhooks</h2>
+                    <span class="bg-white/60 border border-white/80 backdrop-blur-md text-apple-text px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm">v2.4 Stable</span>
+                </div>
+                
+                <div class="space-y-6">
+                    <div class="space-y-4" id="webhook-container">
+                        <!-- Webhook rows added dynamically -->
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
+                        <button onclick="addWebhookField('')" class="w-full bg-white/40 border border-white/80 text-apple-text-muted font-medium text-sm py-3 rounded-full flex items-center justify-center gap-2 hover:bg-white/70 transition-colors backdrop-blur-md shadow-sm">
+                            <span class="material-symbols-outlined text-[18px]">add</span>
+                            Tambah URL Webhook
+                        </button>
+                        <button id="saveHookBtn" onclick="saveWebhook()" class="w-full bg-apple-text text-white font-semibold py-3 rounded-full shadow-md hover:bg-black transition-colors text-sm">
+                            Simpan Webhook
+                        </button>
+                    </div>
+                    
+                    <div class="mt-8 p-5 rounded-2xl bg-white/40 border border-white/80 backdrop-blur-md flex items-start gap-3 shadow-sm">
+                        <span class="material-symbols-outlined text-apple-primary text-[20px] mt-0.5" style="font-variation-settings: 'FILL' 1;">info</span>
+                        <div>
+                            <p class="text-xs text-apple-text-muted leading-relaxed font-medium">Webhook endpoints must support POST requests and return a 200 OK status within 5 seconds to ensure delivery reliability.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+    
+    <footer class="w-full py-8 mt-12 relative z-10 border-t border-gray-200/50">
+        <div class="flex flex-col md:flex-row justify-between items-center px-4 gap-4">
+            <p class="text-xs font-medium text-apple-text-muted">© 2026 W-Manager Protocol. All rights reserved.</p>
+        </div>
+    </footer>
+</main>
+
+<div id="toast">Notifikasi</div>
+
+<script>
+    // ===== Dynamic Background Interaction =====
+    const inputField = document.getElementById('lockApiKey');
+    inputField.addEventListener('input', (e) => {
+        const length = e.target.value.length;
+        const glowElements = document.querySelectorAll('.ambient-glow');
+        const opacity = Math.min(0.03 + (length * 0.01), 0.15);
+        glowElements.forEach(glow => {
+            glow.style.background = `radial-gradient(circle, rgba(0, 113, 227, ${opacity}) 0%, rgba(245, 245, 247, 0) 70%)`;
+        });
+    });
+    window.addEventListener('load', () => setTimeout(() => inputField.focus(), 500));
+
+    // ===== UI Functions =====
+    function addWebhookField(val) {
+        const container = document.getElementById('webhook-container');
+        const newRow = document.createElement('div');
+        newRow.className = 'flex items-center gap-3 group relative transition-all duration-300';
+        newRow.innerHTML = `
+            <div class="flex-grow">
+                <input type="url" placeholder="https://..." value="${val}" class="w-full apple-input webhook-url rounded-full px-5 py-3 outline-none text-sm font-medium text-apple-text pr-10">
+            </div>
+            <button type="button" class="absolute right-2 w-8 h-8 flex items-center justify-center text-apple-text-muted hover:text-error hover:bg-error/10 rounded-full transition-colors bg-white/40 backdrop-blur-sm remove-hook" title="Delete Webhook">
+                <span class="material-symbols-outlined text-[18px]">close</span>
+            </button>
+        `;
+        container.appendChild(newRow);
+        
+        newRow.querySelector('.remove-hook').addEventListener('click', function() {
+            newRow.style.opacity = '0';
+            newRow.style.transform = 'translateY(-10px)';
+            newRow.style.transition = 'all 0.2s ease';
+            setTimeout(() => newRow.remove(), 200);
+        });
+    }
+
+    function showToast(msg, isError = false) {
+        const toast = document.getElementById('toast');
+        toast.textContent = msg;
+        toast.style.background = isError ? '#ba1a1a' : 'rgba(0,0,0,0.8)';
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    // ===== Logic API =====
+    let verifyRunning = false;
+    async function verifyKey() {
+        if (verifyRunning) return;
+        verifyRunning = true;
+        
+        const key = document.getElementById('lockApiKey').value;
+        const btn = document.getElementById('btnVerify');
+        const btnText = document.getElementById('btnVerifyText');
+        const btnIcon = document.getElementById('btnVerifyIcon');
+        
+        // Animasi loading tombol
+        btn.classList.add('w-32');
+        btnText.style.opacity = '1';
+        btnText.style.transform = 'translateX(-10px)';
+        btnText.innerHTML = 'Wait...';
+        btnIcon.style.opacity = '0';
+        
+        try {
+            const res = await fetch('/api/verify?key=' + encodeURIComponent(key));
+            if (res.ok) {
+                // Success animation
+                btn.classList.add('scale-[150]', 'opacity-0');
+                document.getElementById('lockApiKey').parentElement.classList.add('opacity-0', 'blur-xl');
+                
+                setTimeout(async () => {
+                    document.getElementById('apiKey').value = key;
+                    const param = key ? '?key=' + encodeURIComponent(key) : '';
+                    document.getElementById('linkQr').href = '/qr' + param;
+                    document.getElementById('linkLogout').href = '/logout' + param;
+
+                    // Switch screen
+                    document.getElementById('lockScreen').style.display = 'none';
+                    const db = document.getElementById('dashboardScreen');
+                    db.classList.remove('hidden');
+                    void db.offsetWidth; // trigger reflow
+                    db.classList.remove('opacity-0');
+
+                    // Fetch webhooks
+                    if (document.getElementById('webhook-container').children.length === 0) {
+                        const hookRes = await fetch('/api/webhook' + param);
+                        if (hookRes.ok) {
+                            const hookData = await hookRes.json();
+                            const urls = hookData.webhook_urls || [];
+                            if (urls.length === 0) addWebhookField('');
+                            else urls.forEach(u => addWebhookField(u));
+                        }
+                    }
+                }, 600);
+            } else {
+                showToast('API Key Salah!', true);
+                resetButton();
+            }
+        } catch (e) {
+            showToast('Koneksi Error', true);
+            resetButton();
+        }
+        verifyRunning = false;
+        
+        function resetButton() {
+            btn.classList.remove('w-32');
+            btnText.style.opacity = '';
+            btnText.style.transform = '';
+            btnText.innerHTML = 'ENTER';
+            btnIcon.style.opacity = '1';
+        }
+    }
+
+    async function saveWebhook() {
+        const key = document.getElementById('apiKey').value;
+        const inputs = document.querySelectorAll('.webhook-url');
+        const urls = Array.from(inputs).map(i => i.value.trim()).filter(v => v !== '');
+        const btn = document.getElementById('saveHookBtn');
+        
+        btn.disabled = true;
+        btn.innerHTML = 'Menyimpan...';
+        btn.classList.add('opacity-70');
+        
+        try {
+            const res = await fetch('/api/webhook?key=' + encodeURIComponent(key), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ webhook_urls: urls })
+            });
+            if (res.ok) showToast('Webhook berhasil disimpan!');
+            else showToast('Gagal menyimpan webhook', true);
+        } catch (e) {
+            showToast('Error koneksi', true);
+        }
+        
+        btn.innerHTML = 'Simpan Webhook';
+        btn.disabled = false;
+        btn.classList.remove('opacity-70');
+    }
+
+    async function sendMessage() {
+        const key = document.getElementById('apiKey').value;
+        const phone = document.getElementById('testPhone').value;
+        const message = document.getElementById('testMessage').value;
+        const btn = document.getElementById('sendBtn');
+
+        if (!phone || !message) {
+            showToast('Nomor HP dan pesan wajib diisi!', true);
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = 'Mengirim...';
+        btn.classList.add('opacity-70');
+
+        try {
+            let headers = { 'Content-Type': 'application/json' };
+            if (key) headers['Authorization'] = 'Bearer ' + key;
+
+            const response = await fetch('/send', {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify({ phone, message })
+            });
+
+            let data;
+            const text = await response.text();
+            try { data = JSON.parse(text); } catch(e) { data = { message: text } }
+
+            if (response.ok) {
+                showToast('Sukses! Pesan terkirim.');
+                document.getElementById('testMessage').value = '';
+            } else {
+                showToast('Gagal: ' + (data.message || response.statusText), true);
+            }
+        } catch (err) {
+            showToast('Terjadi kesalahan koneksi', true);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = 'Kirim Pesan';
+            btn.classList.remove('opacity-70');
+        }
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html class="light" lang="id">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>WhatsApp QR Login</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary-fixed": "#d7e2ff",
+                        "primary-fixed-dim": "#abc7ff",
+                        "primary": "#0059b5",
+                        "secondary": "#5f5e60",
+                        "on-surface": "#1a1b1f",
+                        "on-surface-variant": "#414753",
+                        "on-secondary-container": "#636264",
+                        "outline-variant": "#c1c6d6",
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #F5F5F7;
+            background-image: radial-gradient(circle at 15% 50%, rgba(200, 215, 255, 0.4), transparent 30%), 
+                              radial-gradient(circle at 85% 30%, rgba(200, 215, 255, 0.4), transparent 30%);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+        .liquid-glass-card {
+            background: rgba(255, 255, 255, 0.65);
+            backdrop-filter: blur(40px);
+            -webkit-backdrop-filter: blur(40px);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07), inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+        }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        @keyframes pulse-soft { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+        .animate-pulse-soft { animation: pulse-soft 3s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4 md:p-0 relative overflow-hidden">
+    <!-- Background Decorative Element -->
+    <div class="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
+        <div class="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-primary-fixed/30 blur-[140px]"></div>
+        <div class="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-primary-fixed/30 blur-[140px]"></div>
+    </div>
+    
+    <main class="w-full max-w-[540px] z-10 flex flex-col items-center">
+        <!-- Back Link Floating -->
+        <div class="w-full mb-6 flex justify-start px-4 md:px-0">
+            <a class="group flex items-center gap-2 text-secondary hover:text-on-surface transition-colors duration-200 text-[13px] font-medium" href="/">
+                <span class="material-symbols-outlined text-[18px]">arrow_back</span>
+                Back to Dashboard
+            </a>
+        </div>
+        
+        <!-- QR Linking Card -->
+        <div class="liquid-glass-card rounded-[2.5rem] p-10 md:p-14 w-full flex flex-col items-center text-center perspective-1000">
+            <!-- Header Section -->
+            <div class="mb-10">
+                <h1 class="text-[32px] font-bold text-on-surface mb-3 tracking-tight">Tautkan Perangkat</h1>
+                <p class="text-[17px] text-on-secondary-container max-w-[340px] mx-auto opacity-80 leading-relaxed">
+                    Buka aplikasi WhatsApp di ponsel Anda dan pindai kode QR di bawah ini untuk menghubungkan.
+                </p>
+            </div>
+            
+            <!-- QR Code Display Area -->
+            <div class="relative group mb-2">
+                <!-- Inner glow effect -->
+                <div class="absolute -inset-6 bg-primary-fixed-dim/20 rounded-[3rem] blur-2xl group-hover:bg-primary-fixed-dim/30 transition-all duration-500"></div>
+                <div class="relative bg-white/90 backdrop-blur-md p-8 rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-white/60 transition-transform duration-300 group-hover:scale-[1.02]">
+                    <div class="w-56 h-56 md:w-64 md:h-64 flex items-center justify-center relative overflow-hidden rounded-xl">
+                        <img class="w-full h-full object-contain mix-blend-multiply" src="{{QR_URL}}" alt="WhatsApp QR Code">
+                        <!-- Scanning Animation Overlay -->
+                        <div class="absolute left-0 right-0 h-[2px] bg-primary/30 shadow-[0_0_12px_rgba(0,89,181,0.4)] z-20 top-0" id="scan-line"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Status & Timer -->
+            <div class="mt-10 flex flex-col items-center gap-5">
+                <div class="flex items-center gap-2 px-5 py-2.5 bg-white/50 border border-white/60 backdrop-blur-sm rounded-full shadow-sm">
+                    <span class="w-2 h-2 rounded-full bg-[#34C759] shadow-[0_0_8px_rgba(52,199,89,0.5)] animate-pulse"></span>
+                    <span class="text-[13px] text-on-surface-variant font-medium">Menunggu pemindaian...</span>
+                </div>
+                <p class="text-[13px] text-secondary/70">
+                    Memperbarui otomatis dalam <span class="font-bold text-on-surface" id="timer-count">10</span> detik...
+                </p>
+            </div>
+        </div>
+        
+        <!-- Security Information Footer -->
+        <footer class="mt-10 text-center px-6 w-full max-w-[400px]">
+            <div class="flex justify-center items-center gap-8 mb-5">
+                <div class="flex flex-col items-center">
+                    <span class="material-symbols-outlined text-secondary/40 mb-1.5 text-[20px]">encrypted</span>
+                    <span class="text-[10px] uppercase tracking-widest text-secondary/60 font-semibold">End-to-End</span>
+                </div>
+                <div class="w-[1px] h-6 bg-outline-variant/30"></div>
+                <div class="flex flex-col items-center">
+                    <span class="material-symbols-outlined text-secondary/40 mb-1.5 text-[20px]">verified_user</span>
+                    <span class="text-[10px] uppercase tracking-widest text-secondary/60 font-semibold">Secure Link</span>
+                </div>
+            </div>
+            <p class="text-[13px] text-secondary/60 leading-relaxed font-medium">
+                © 2026 W-Manager Protocol. Enkripsi diproses secara lokal.
+            </p>
+        </footer>
+    </main>
+    
+    <script>
+        // Timer Logic
+        let timeLeft = 10;
+        const timerElement = document.getElementById('timer-count');
+        
+        setInterval(() => {
+            timeLeft--;
+            if (timeLeft <= 0) location.reload();
+            else timerElement.textContent = timeLeft;
+        }, 1000);
+
+        // Scan Line Animation
+        const scanLine = document.getElementById('scan-line');
+        let position = 0;
+        let direction = 1;
+        
+        function animateScan() {
+            position += 0.6 * direction;
+            if (position >= 100 || position <= 0) direction *= -1;
+            scanLine.style.top = position + '%';
+            requestAnimationFrame(animateScan);
+        }
+        animateScan();
+
+        // Subtle parallax on mouse move for the card
+        const card = document.querySelector('.liquid-glass-card');
+        document.addEventListener('mousemove', (e) => {
+            const xAxis = (window.innerWidth / 2 - e.pageX) / 80;
+            const yAxis = (window.innerHeight / 2 - e.pageY) / 80;
+            card.style.transform = `rotateY(${xAxis}deg) rotateX(${yAxis}deg)`;
+        });
+        document.addEventListener('mouseleave', () => {
+            card.style.transform = `rotateY(0deg) rotateX(0deg)`;
+        });
+    </script>
+</body>
+</html>
