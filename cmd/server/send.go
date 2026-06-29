@@ -258,18 +258,62 @@ func handleBroadcast(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go func(phones []string, payload SendRequest, delay int, delayMax int) {
-		for _, phone := range phones {
-			payload.Phone = phone
-			sendInternal(payload)
-
-			if delayMax > delay+1 {
-				sleepTime := delay + rand.Intn(delayMax-delay)
-				time.Sleep(time.Duration(sleepTime) * time.Millisecond)
-			} else if delay > 0 {
-				time.Sleep(time.Duration(delay) * time.Millisecond)
+	// Optimasi: Download gambar/dokumen 1 kali di awal, hindari terblokir server karena download berulang
+	if req.Payload.ImageURL != "" && req.Payload.ImageBase64 == "" {
+		httpClient := &http.Client{Timeout: 30 * time.Second}
+		mediaReq, err := http.NewRequest("GET", req.Payload.ImageURL, nil)
+		if err == nil {
+			mediaReq.Header.Set("User-Agent", "Mozilla/5.0")
+			mediaResp, err := httpClient.Do(mediaReq)
+			if err == nil && mediaResp.StatusCode == 200 {
+				mediaBytes, _ := io.ReadAll(io.LimitReader(mediaResp.Body, 15*1024*1024))
+				req.Payload.ImageBase64 = base64.StdEncoding.EncodeToString(mediaBytes)
+				req.Payload.ImageURL = "" // Kosongkan URL agar sendInternal pakai Base64
+			}
+			if mediaResp != nil {
+				mediaResp.Body.Close()
 			}
 		}
+	} else if req.Payload.DocumentURL != "" && req.Payload.DocumentBase64 == "" {
+		httpClient := &http.Client{Timeout: 60 * time.Second}
+		mediaReq, err := http.NewRequest("GET", req.Payload.DocumentURL, nil)
+		if err == nil {
+			mediaReq.Header.Set("User-Agent", "Mozilla/5.0")
+			mediaResp, err := httpClient.Do(mediaReq)
+			if err == nil && mediaResp.StatusCode == 200 {
+				mediaBytes, _ := io.ReadAll(io.LimitReader(mediaResp.Body, 50*1024*1024))
+				req.Payload.DocumentBase64 = base64.StdEncoding.EncodeToString(mediaBytes)
+				req.Payload.DocumentURL = ""
+			}
+			if mediaResp != nil {
+				mediaResp.Body.Close()
+			}
+		}
+	}
+
+	go func(phones []string, payload SendRequest, delay int, delayMax int) {
+		fmt.Printf("[BROADCAST] Memulai pengiriman ke %d nomor...\n", len(phones))
+		for i, phone := range phones {
+			payload.Phone = phone
+			resp, err := sendInternal(payload)
+
+			if err != nil {
+				fmt.Printf("[BROADCAST %d/%d] ❌ Gagal kirim ke %s: %v\n", i+1, len(phones), phone, err)
+			} else {
+				fmt.Printf("[BROADCAST %d/%d] ✅ Berhasil kirim ke %s (ID: %s)\n", i+1, len(phones), phone, resp.ID)
+			}
+
+			// Beri jeda kecuali untuk nomor terakhir
+			if i < len(phones)-1 {
+				if delayMax > delay+1 {
+					sleepTime := delay + rand.Intn(delayMax-delay)
+					time.Sleep(time.Duration(sleepTime) * time.Millisecond)
+				} else if delay > 0 {
+					time.Sleep(time.Duration(delay) * time.Millisecond)
+				}
+			}
+		}
+		fmt.Printf("[BROADCAST] Selesai mengirim ke %d nomor.\n", len(phones))
 	}(req.Phones, req.Payload, req.DelayMs, req.DelayMsMax)
 
 	w.Header().Set("Content-Type", "application/json")
