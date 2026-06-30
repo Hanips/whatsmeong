@@ -74,14 +74,22 @@ func main() {
 
 	if client.Store.ID == nil {
 		// No ID stored, need to link device
-		startQRFlow()
+		go startQRFlow()
 	} else {
 		// Already logged in
-		err = client.Connect()
-		if err != nil {
-			log.Fatalf("Failed to connect: %v", err)
-		}
-		fmt.Println("WhatsApp client connected!")
+		go func() {
+			var err error
+			for i := 1; i <= 5; i++ {
+				err = client.Connect()
+				if err == nil {
+					fmt.Println("WhatsApp client connected!")
+					return
+				}
+				log.Printf("Failed to connect (attempt %d/5): %v. Retrying in 5 seconds...", i, err)
+				time.Sleep(5 * time.Second)
+			}
+			log.Printf("Failed to connect to WhatsApp after 5 attempts. Server running, but WA is offline.")
+		}()
 	}
 
 	port := getEnv("PORT")
